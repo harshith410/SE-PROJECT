@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spendly – Personal Expense Tracker</title>
+<style>
+:root{--bg:#eaf0ee;--card:#fff;--tx:#12302b;--mut:#5d716d;--bd:#d3dedb;--ac:#0f766e;--on:#fff;--bad:#c2410c;--ok:#15803d;--warn:#b45309;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1816;--card:#16231f;--tx:#e4efec;--mut:#93aaa5;--bd:#26372f;--ac:#2dd4bf;--on:#06201d;--bad:#fb923c;--ok:#4ade80;--warn:#fbbf24;color-scheme:dark}}
+*{box-sizing:border-box}html,body{margin:0}[hidden]{display:none!important}
+body{background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:980px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+h1{font-size:28px;font-weight:800;margin:0;letter-spacing:-.5px}h2{font-size:16px;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.grid .card small{color:var(--mut);display:block}.grid b{font-size:22px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row>*{flex:1 1 120px}
+input,select,button{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;min-width:0}
+button{cursor:pointer;background:var(--ac);color:var(--on);border:0;font-weight:600}
+button.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.f{display:grid;gap:8px}.ok{color:var(--ok)}.bad{color:var(--bad)}.mut{color:var(--mut)}
+.track{height:10px;border-radius:6px;background:var(--bd);overflow:hidden;margin:10px 0 4px}.track i{display:block;height:100%}
+.it{display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;padding:8px 0;border-top:1px solid var(--bd)}
+.it small{display:block;color:var(--mut)}.it button{padding:4px 8px;background:transparent;border:1px solid var(--bd);color:var(--tx)}
+#auth{max-width:380px;margin:8vh auto 0}#msg{position:sticky;top:0;z-index:5;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:var(--bad);color:#fff}
+.lnk{background:none;border:0;color:var(--ac);padding:4px;text-decoration:underline;font-weight:600}
+@media(max-width:700px){.two{grid-template-columns:1fr}.grid b{font-size:17px}}
+</style></head><body><div class="wrap">
+<div id="msg" role="alert" hidden></div>
+
+<section id="auth" class="card" hidden>
+<h1>💰 Spendly</h1><p class="mut" id="atag">Log in to see your expenses on any device.</p>
+<div class="f"><input id="an" placeholder="Your name" autocomplete="name" hidden>
+<input id="ae" type="email" placeholder="Email" autocomplete="email">
+<input id="ap" type="password" placeholder="Password (8+ characters)" autocomplete="current-password">
+<button id="ago">Log in</button>
+<button class="lnk" id="aswap">New here? Create an account</button></div></section>
+
+<main id="app" hidden>
+<header><h1>💰 Spendly</h1><div class="row"><input type="month" id="m" aria-label="Month"><select id="cur" aria-label="Currency"><option>₹</option><option>$</option><option>€</option><option>£</option></select><button class="g" id="out">Log out</button></div></header>
+<p class="mut" id="who"></p>
+<section class="grid" id="sum"></section>
+<section class="card"><h2>Monthly budget</h2><div class="row"><input type="number" id="bud" min="0" placeholder="Budget for this month"><button id="bset">Save budget</button></div><div id="bar"></div></section>
+<section class="two">
+<div class="card"><h2 id="ft">Add transaction</h2><div class="f">
+<select id="t"><option value="expense">Expense</option><option value="income">Income</option></select>
+<input type="number" id="a" min="0" step="0.01" placeholder="Amount">
+<select id="c"></select><input type="date" id="d"><input type="text" id="n" placeholder="Note (optional)" maxlength="80">
+<div class="row"><button id="add">Add transaction</button><button class="g" id="cx" hidden>Cancel edit</button></div><small class="bad" id="err"></small></div></div>
+<div class="card"><h2>Spending by category</h2><div id="chart"></div></div>
+</section>
+<section class="card"><h2>Transactions</h2>
+<div class="row"><select id="fc"></select><input type="search" id="q" placeholder="Search notes"><button class="g" id="exp">Download CSV</button></div>
+<div id="list"></div></section>
+</main></div>
+<script>
+const CATS=["Food","Transport","Rent","Shopping","Bills","Health","Entertainment","Education","Other"];
+const API=(location.protocol.startsWith("http")?"":"http://127.0.0.1:5000")+"/api";   // same origin when served by Flask
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let token=null,cur="₹",cache=[],eid=null,signup=false,timer;
+try{token=localStorage.getItem("spendly_token")}catch(e){}
+const today=new Date().toISOString().slice(0,10);let m=today.slice(0,7);
+$("#m").value=m;$("#d").value=today;
+$("#c").innerHTML=CATS.map(c=>`<option>${c}</option>`).join("");
+$("#fc").innerHTML='<option value="">All categories</option>'+CATS.map(c=>`<option>${c}</option>`).join("");
+
+function msg(t){const e=$("#msg");e.textContent=t;e.hidden=!t;if(t)setTimeout(()=>{if(e.textContent==t)e.hidden=true},5000)}
+async function api(path,opt={}){
+ let r;
+ try{r=await fetch(API+path,{method:opt.method||"GET",headers:Object.assign({"Content-Type":"application/json"},token?{Authorization:"Bearer "+token}:{}),body:opt.body?JSON.stringify(opt.body):undefined})}
+ catch(e){throw new Error("Cannot reach the server. Is the backend running?")}
+ if(opt.raw&&r.ok)return r;
+ if(r.status==204)return null;
+ const d=await r.json().catch(()=>({}));
+ if(r.status==401&&token){logout();throw new Error("Session expired. Please log in again.")}
+ if(!r.ok)throw new Error(d.error||"Request failed");
+ return d}
+function showAuth(){$("#auth").hidden=false;$("#app").hidden=true}
+function logout(){token=null;try{localStorage.removeItem("spendly_token")}catch(e){}showAuth()}
+function enter(d){token=d.token||token;if(d.token)try{localStorage.setItem("spendly_token",d.token)}catch(e){}
+ cur=d.user.currency;$("#cur").value=cur;$("#who").textContent="Signed in as "+d.user.name+" ("+d.user.email+")";
+ $("#auth").hidden=true;$("#app").hidden=false;refresh()}
+
+$("#aswap").onclick=()=>{signup=!signup;$("#an").hidden=!signup;$("#ago").textContent=signup?"Create account":"Log in";$("#aswap").textContent=signup?"Have an account? Log in":"New here? Create an account"};
+$("#ago").onclick=async()=>{
+ try{const body={email:$("#ae").value,password:$("#ap").value};if(signup)body.name=$("#an").value;
+  enter(await api(signup?"/auth/register":"/auth/login",{method:"POST",body}));$("#ap").value=""}
+ catch(e){msg(e.message)}};
+$("#out").onclick=logout;
+
+async function refresh(){
+ try{const fc=$("#fc").value,q=$("#q").value.trim();
+  const qs="month="+m+(fc?"&category="+encodeURIComponent(fc):"")+(q?"&q="+encodeURIComponent(q):"");
+  const [sm,tx]=await Promise.all([api("/summary?month="+m),api("/transactions?limit=1000&"+qs)]);
+  cache=tx.transactions;draw(sm,cache,!fc&&!q)}
+ catch(e){msg(e.message)}}
+function draw(sm,L,unfiltered){
+ const f=n=>cur+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+ $("#sum").innerHTML=`<div class="card"><small>Income</small><b class="ok">${f(sm.income)}</b></div><div class="card"><small>Spent</small><b class="bad">${f(sm.spent)}</b></div><div class="card"><small>Balance</small><b>${f(sm.balance)}</b></div>`;
+ const p=sm.budget_used_percent,st=sm.budget_status;
+ $("#bar").innerHTML=sm.budget?`<div class="track"><i style="width:${Math.min(p,100)}%;background:${st=="over_budget"?"var(--bad)":st=="close_to_limit"?"var(--warn)":"var(--ok)"}"></i></div><span>${f(sm.spent)} of ${f(sm.budget)} spent (${p.toFixed(0)}%) — ${st=="over_budget"?"over budget by "+f(sm.over_by):st=="close_to_limit"?"close to your limit":"on track"}</span>`:'<p class="mut">No budget set for this month.</p>';
+ if(document.activeElement!==$("#bud"))$("#bud").value=sm.budget||"";
+ const rows=sm.by_category,mx=rows.length?rows[0].total:1;
+ $("#chart").innerHTML=rows.length?`<svg viewBox="0 0 400 ${rows.length*30}" width="100%" role="img" aria-label="Spending by category">${rows.map((r,i)=>{const w=r.total/mx*140,y=i*30;return `<text x="0" y="${y+17}" font-size="12" style="fill:var(--tx)">${r.category}</text><rect x="90" y="${y+4}" width="${w}" height="16" rx="4" style="fill:var(--ac)"/><text x="${96+w}" y="${y+17}" font-size="12" style="fill:var(--mut)">${f(r.total)}</text>`}).join("")}</svg>`:'<p class="mut">Add an expense to see your breakdown.</p>';
+ $("#list").innerHTML=L.length?L.map(t=>`<div class="it"><div><b>${t.category}</b><small>${t.date}${t.note?" · "+esc(t.note):""}</small></div><b class="${t.type=="income"?"ok":"bad"}">${t.type=="income"?"+":"−"}${f(t.amount)}</b><button data-e="${t.id}" aria-label="Edit">✏️</button><button data-d="${t.id}" aria-label="Delete">🗑️</button></div>`).join(""):`<p class="mut">${unfiltered?"No transactions this month.":"No transactions match."}</p>${unfiltered&&!sm.income&&!sm.spent?'<button class="g" id="demo">Load sample data</button>':""}`}
+
+function reset(){eid=null;$("#a").value="";$("#n").value="";$("#ft").textContent="Add transaction";$("#add").textContent="Add transaction";$("#cx").hidden=true;$("#err").textContent=""}
+$("#add").onclick=async()=>{
+ const body={type:$("#t").value,amount:$("#a").value,category:$("#c").value,date:$("#d").value,note:$("#n").value.trim()};
+ try{await api(eid?"/transactions/"+eid:"/transactions",{method:eid?"PUT":"POST",body});
+  m=body.date.slice(0,7);$("#m").value=m;reset();refresh()}
+ catch(e){$("#err").textContent=e.message}};
+$("#cx").onclick=reset;
+$("#list").onclick=async e=>{
+ const B=e.target.closest("button");if(!B)return;
+ try{
+  if(B.id=="demo"){const names=[["Food",1800,"Groceries"],["Transport",650,"Bus pass"],["Rent",9000,"Room rent"],["Shopping",2400,"Headphones"],["Bills",799,"Phone bill"],["Health",420,"Pharmacy"]];
+   await Promise.all([api("/transactions",{method:"POST",body:{type:"income",amount:25000,category:"Other",date:m+"-01",note:"Allowance"}}),
+    ...names.map((x,i)=>api("/transactions",{method:"POST",body:{type:"expense",amount:x[1],category:x[0],date:m+"-0"+(i+2),note:x[2]}})),
+    api("/budgets/"+m,{method:"PUT",body:{amount:16000}})]);refresh();return}
+  if(B.dataset.e){const t=cache.find(x=>x.id==B.dataset.e);eid=t.id;$("#t").value=t.type;$("#a").value=t.amount;$("#c").value=t.category;$("#d").value=t.date;$("#n").value=t.note;
+   $("#ft").textContent="Edit transaction";$("#add").textContent="Save changes";$("#cx").hidden=false;scrollTo({top:0,behavior:"smooth"})}
+  if(B.dataset.d){if(B.dataset.arm){await api("/transactions/"+B.dataset.d,{method:"DELETE"});refresh()}else{B.dataset.arm=1;B.textContent="Sure?";setTimeout(()=>{B.textContent="🗑️";delete B.dataset.arm},2500)}}
+ }catch(err){msg(err.message)}};
+$("#m").onchange=e=>{m=e.target.value||m;refresh()};
+$("#cur").onchange=async e=>{try{await api("/settings",{method:"PUT",body:{currency:e.target.value}});cur=e.target.value;refresh()}catch(err){msg(err.message)}};
+$("#bset").onclick=async()=>{try{await api("/budgets/"+m,{method:"PUT",body:{amount:$("#bud").value||0}});refresh()}catch(e){msg(e.message)}};
+$("#fc").onchange=refresh;$("#q").oninput=()=>{clearTimeout(timer);timer=setTimeout(refresh,250)};
+$("#exp").onclick=async()=>{try{const fc=$("#fc").value,q=$("#q").value.trim();
+ const r=await api("/transactions/export?month="+m+(fc?"&category="+encodeURIComponent(fc):"")+(q?"&q="+encodeURIComponent(q):""),{raw:true});
+ const a=document.createElement("a");a.href=URL.createObjectURL(await r.blob());a.download="spendly-"+m+".csv";a.click();URL.revokeObjectURL(a.href)}catch(e){msg(e.message)}};
+
+(async()=>{if(!token)return showAuth();
+ try{enter(await api("/auth/me"))}catch(e){showAuth()}})();
+</script></body></html>

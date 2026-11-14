@@ -78,9 +78,6 @@ def register():
             jsonify(user=public_user(row), token=make_token(row["id"])),
             201,
         )
-    if not row or not ok:
-        raise ApiError(401, "Invalid email or password")
-    return jsonify(user=public_user(row), token=make_token(row["id"]))
 
 
 @bp.get("/me")

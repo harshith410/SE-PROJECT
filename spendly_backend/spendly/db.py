@@ -1,4 +1,3 @@
-
 """PostgreSQL connection handling and schema."""
 import os
 import psycopg2
@@ -41,3 +40,18 @@ def get_db():
         g.db = psycopg2.connect(os.environ.get("POSTGRES_URL"))
         g.db.autocommit = True
     return g.db
+
+def close_db(e=None):
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
+
+def init_db():
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute(SCHEMA)
+    db.commit()
+    cursor.close()
+
+def init_app(app):
+    app.teardown_appcontext(close_db)

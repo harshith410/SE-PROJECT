@@ -60,23 +60,24 @@ def register():
         raise ApiError(400, "a valid email is required")
     if not isinstance(password, str) or not 8 <= len(password) <= 128:
         raise ApiError(400, "password must be 8 to 128 characters")
-   db = get_db()
-    try:
-        cur = db.cursor()
-        cur.execute(
-            "INSERT INTO users (name, email, password_hash) VALUES (%s, %s, %s)",
-            (name, email, generate_password_hash(password)),
+  db = get_db()
+        try:
+            cur = db.cursor()
+            cur.execute(
+                "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+                (name, email, generate_password_hash(password)),
+            )
+            db.commit()
+        except Exception:
+            raise ApiError(
+                409, "An account with this email already exists"
+            )
+        cur.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,))
+        row = cur.fetchone()
+        return (
+            jsonify(user=public_user(row), token=make_token(row["id"])),
+            201,
         )
-        db.commit()
-    except Exception:
-        raise ApiError(409, "An account with this email already exists")
-    cur.execute("SELECT * FROM users WHERE id = %s", (cur.lastrowid,))
-    row = cur.fetchone()
-    return jsonify(user=public_user(row), token=make_token(row["id"])), 201
-    password = data.get("password", "")
-    row = get_db().execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
-    stored = row["password_hash"] if row else _DUMMY_HASH
-    ok = isinstance(password, str) and check_password_hash(stored, password)
     if not row or not ok:
         raise ApiError(401, "Invalid email or password")
     return jsonify(user=public_user(row), token=make_token(row["id"]))

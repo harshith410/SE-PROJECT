@@ -36,17 +36,14 @@ CREATE TABLE IF NOT EXISTS budgets (
 
 def get_db():
     if "db" not in g:
-        # Construct connection string from individual variables
-        host = os.environ.get("POSTGRES_HOST")
-        database = os.environ.get("POSTGRES_DATABASE")
-        user = os.environ.get("POSTGRES_USER")
-        password = os.environ.get("POSTGRES_PASSWORD")
-        port = os.environ.get("POSTGRES_PORT", "5432")
-        
-        conn_str = f"host={host} dbname={database} user={user} password={password} port={port}"
-        g.db = psycopg2.connect(conn_str)
+        # Use the Supabase transaction pooler URL for serverless environments
+        pooler_url = os.environ.get("SUPABASE_POOLER_URL")
+        if not pooler_url:
+            raise ValueError("SUPABASE_POOLER_URL environment variable is not set")
+        g.db = psycopg2.connect(pooler_url)
         g.db.autocommit = True
     return g.db
+```
 
 def close_db(e=None):
     db = g.pop("db", None)

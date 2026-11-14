@@ -75,7 +75,7 @@ def register():
         raise ApiError(400, "password must be 8 to 128 characters")
     db = get_db()
     try:
-       cur = db.cursor()
+        cur = db.cursor()
         cur.execute(
             "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?) RETURNING id, name, email, currency",
             (name, email, generate_password_hash(password)),
@@ -85,6 +85,7 @@ def register():
         return jsonify(user=public_user(row), token=make_token(row["id"])), 201
     except Exception:
         raise ApiError(409, "An account with this email already exists")
+
 
 @bp.post("/login")
 def login():
@@ -101,6 +102,8 @@ def login():
         raise ApiError(400, "Invalid email or password")
 
     return jsonify(user=public_user(user), token=make_token(user["id"]))
+
+
 @bp.get("/me")
 @token_required
 def me():

@@ -60,7 +60,7 @@ def register():
         raise ApiError(400, "a valid email is required")
     if not isinstance(password, str) or not 8 <= len(password) <= 128:
         raise ApiError(400, "password must be 8 to 128 characters")
-         db = get_db()
+    db = get_db()
     try:
         cur = db.cursor()
         cur.execute(
@@ -68,11 +68,12 @@ def register():
             (name, email, generate_password_hash(password)),
         )
         db.commit()
-    except Exception:
-        raise ApiError(409, "An account with this email already exists")
-    cur.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,))
+         cur.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,))
     row = cur.fetchone()
-    return jsonify(user=public_user(row), token=make_token(row["id"])), 201
+        return jsonify(user=public_user(row), token=make_token(row["id"])), 201
+        except Exception:
+        raise ApiError(409, "An account with this email already exists")
+    
 
 
 @bp.get("/me")

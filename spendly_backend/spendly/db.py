@@ -36,15 +36,17 @@ CREATE TABLE IF NOT EXISTS budgets (
 
 def get_db():
     if "db" not in g:
-        # Connect to PostgreSQL using the POSTGRES_URL environment variable
-        g.db = psycopg2.connect(os.environ.get("POSTGRES_URL"))
+        # Construct connection string from individual variables
+        host = os.environ.get("POSTGRES_HOST")
+        database = os.environ.get("POSTGRES_DATABASE")
+        user = os.environ.get("POSTGRES_USER")
+        password = os.environ.get("POSTGRES_PASSWORD")
+        port = os.environ.get("POSTGRES_PORT", "5432")
+        
+        conn_str = f"host={host} dbname={database} user={user} password={password} port={port}"
+        g.db = psycopg2.connect(conn_str)
         g.db.autocommit = True
     return g.db
-
-def close_db(e=None):
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
 
 def init_db():
     db = get_db()

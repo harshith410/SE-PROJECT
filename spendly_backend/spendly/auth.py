@@ -13,13 +13,16 @@ from .utils import ApiError, json_body
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-_DUMMY_HASH = generate_password_hash("not-a-real-password")   # equalises login timing
+_DUMMY_HASH = generate_password_hash("not-a-real-password")  # equalises login timing
 
 
 def make_token(user_id):
     now = datetime.now(timezone.utc)
-    payload = {"sub": str(user_id), "iat": now,
-               "exp": now + timedelta(hours=current_app.config["TOKEN_HOURS"])}
+    payload = {
+        "sub": str(user_id),
+        "iat": now,
+        "exp": now + timedelta(hours=current_app.config["TOKEN_HOURS"]),
+    }
     return jwt.encode(payload, current_app.config["SECRET_KEY"], algorithm="HS256")
 
 
@@ -30,22 +33,32 @@ def token_required(view):
         if not header.startswith("Bearer "):
             raise ApiError(401, "Missing or invalid Authorization header")
         try:
-            data = jwt.decode(header[7:], current_app.config["SECRET_KEY"], algorithms=["HS256"])
+            data = jwt.decode(
+                header[7:], current_app.config["SECRET_KEY"], algorithms=["HS256"]
+            )
             user_id = int(data["sub"])
         except jwt.ExpiredSignatureError:
             raise ApiError(401, "Token has expired, please log in again")
         except (jwt.InvalidTokenError, KeyError, ValueError):
             raise ApiError(401, "Invalid token")
-        user = get_db().execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = (
+            get_db().execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+        )
         if user is None:
             raise ApiError(401, "Account no longer exists")
         g.user_id = user_id
         return view(*args, **kwargs)
+
     return wrapper
 
 
 def public_user(row):
-    return {"id": row["id"], "name": row["name"], "email": row["email"], "currency": row["currency"]}
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "email": row["email"],
+        "currency": row["currency"],
+    }
 
 
 @bp.post("/register")
@@ -68,12 +81,11 @@ def register():
             (name, email, generate_password_hash(password)),
         )
         db.commit()
-         cur.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,))
-    row = cur.fetchone()
+        cur.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,))
+        row = cur.fetchone()
         return jsonify(user=public_user(row), token=make_token(row["id"])), 201
-        except Exception:
+    except Exception:
         raise ApiError(409, "An account with this email already exists")
-    
 
 
 @bp.get("/me")

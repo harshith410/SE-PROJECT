@@ -1,4 +1,4 @@
-```python
+
 """PostgreSQL connection handling and schema."""
 import os
 import psycopg2
@@ -41,4 +41,3 @@ def get_db():
         g.db = psycopg2.connect(os.environ.get("POSTGRES_URL"))
         g.db.autocommit = True
     return g.db
-```

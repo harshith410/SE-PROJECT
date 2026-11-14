@@ -43,7 +43,6 @@ def get_db():
         g.db = psycopg2.connect(pooler_url)
         g.db.autocommit = True
     return g.db
-```
 
 def close_db(e=None):
     db = g.pop("db", None)
